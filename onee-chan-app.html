@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>おねえちゃん タスク</title>
+
+<!-- iPadで「ホーム画面に追加」した時にフルスクリーンのアプリとして起動するための設定 -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="おねえちゃんタスク" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#FDEFF9" />
+
+<!-- ホーム画面アイコン（絵文字ベースのシンプルなアイコンをその場で生成） -->
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%23FDEFF9'/%3E%3Ctext x='50%25' y='58%25' font-size='100' text-anchor='middle' dominant-baseline='middle'%3E%F0%9F%8C%B8%3C/text%3E%3C/svg%3E" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%23FDEFF9'/%3E%3Ctext x='50%25' y='58%25' font-size='100' text-anchor='middle' dominant-baseline='middle'%3E%F0%9F%8C%B8%3C/text%3E%3C/svg%3E" />
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    /* iPadの上下のノッチ/セーフエリアに余白がかぶらないように */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/javascript">
+const { useState, useEffect, useRef, useCallback } = React;
+const DEFAULT_TASKS = [
+  { id: "toys", label: "\u304A\u3082\u3061\u3083\u3092 \u304B\u305F\u3065\u3051\u308B", emoji: "\u{1F9F8}" },
+  { id: "diaper", label: "\u3042\u304B\u3061\u3083\u3093\u306E \u304A\u3080\u3064\u3092 \u3082\u3063\u3066\u304F\u308B", emoji: "\u{1F476}" },
+  { id: "teeth", label: "\u306F\u307F\u304C\u304D\u3092 \u3059\u308B", emoji: "\u{1FAA5}" },
+  { id: "futon", label: "\u304A\u3075\u3068\u3093\u3092 \u305F\u305F\u3080", emoji: "\u{1F6CF}\uFE0F" },
+  { id: "toilet", label: "\u3044\u3061\u306B\u3061 \u304A\u3057\u3063\u3053 \u3082\u308C\u306A\u304B\u3063\u305F", emoji: "\u{1FA72}" },
+  { id: "shoes", label: "\u304F\u3064\u3092 \u305D\u308D\u3048\u308B", emoji: "\u{1F45F}" },
+  { id: "dishes", label: "\u304A\u3055\u3089\u3092 \u3055\u3052\u308B", emoji: "\u{1F37D}\uFE0F" }
+];
+const PALETTE = [
+  { bg: "#FFE3EC", ring: "#FFB6C9" },
+  { bg: "#E6F4FF", ring: "#B7DFFF" },
+  { bg: "#FFF6D9", ring: "#FFE29A" },
+  { bg: "#E4FBFF", ring: "#A9EDFA" },
+  { bg: "#E7F8EE", ring: "#B8EBCB" },
+  { bg: "#F1E9FF", ring: "#D8C4FA" },
+  { bg: "#FFEEDD", ring: "#FFCE9E" }
+];
+const THEMES = {
+  flower: {
+    name: "\u306F\u306A",
+    trophyEmoji: "\u{1F338}",
+    stages: [
+      { min: 0, emoji: "\u{1F331}", label: "\u305F\u306D" },
+      { min: 10, emoji: "\u{1F33F}", label: "\u3081 \u304C\u3067\u305F\u3088" },
+      { min: 20, emoji: "\u{1F340}", label: "\u306F\u3063\u3071\u304C \u3075\u3048\u305F" },
+      { min: 30, emoji: "\u{1F33E}", label: "\u304F\u304D\u304C \u306E\u3073\u305F" },
+      { min: 40, emoji: "\u{1F337}", label: "\u3064\u307C\u307F\u304C \u3067\u304D\u305F" },
+      { min: 50, emoji: "\u{1F33C}", label: "\u306F\u306A\u304C \u3059\u3053\u3057 \u3072\u3089\u3044\u305F" },
+      { min: 60, emoji: "\u{1F33B}", label: "\u3052\u3093\u304D\u306B \u3055\u3044\u305F" },
+      { min: 70, emoji: "\u{1F338}", label: "\u307E\u3093\u304B\u3044\u306B \u3061\u304B\u3065\u3044\u305F" },
+      { min: 80, emoji: "\u{1F308}", label: "\u307E\u3093\u304B\u3044\uFF01\u306B\u3058\u304C \u304B\u304B\u3063\u305F\u3088\uFF01" }
+    ]
+  },
+  sky: {
+    name: "\u305D\u3089",
+    trophyEmoji: "\u{1F320}",
+    stages: [
+      { min: 0, emoji: "\u{1F311}", label: "\u3057\u3093\u3052\u3064" },
+      { min: 10, emoji: "\u{1F312}", label: "\u307F\u304B\u3065\u304D" },
+      { min: 20, emoji: "\u{1F313}", label: "\u306F\u3093\u3052\u3064" },
+      { min: 30, emoji: "\u{1F314}", label: "\u307E\u3093\u3052\u3064\u306B \u3061\u304B\u3065\u3044\u305F" },
+      { min: 40, emoji: "\u{1F315}", label: "\u307E\u3093\u3052\u3064" },
+      { min: 50, emoji: "\u2B50", label: "\u307B\u3057\u304C \u3072\u304B\u3063\u305F" },
+      { min: 60, emoji: "\u{1F320}", label: "\u306A\u304C\u308C\u307C\u3057\u304C \u307F\u3048\u305F" },
+      { min: 70, emoji: "\u{1F30C}", label: "\u3042\u307E\u306E\u304C\u308F\u304C \u3072\u308D\u304C\u3063\u305F" },
+      { min: 80, emoji: "\u{1F308}", label: "\u305D\u3089\u306B \u306B\u3058\u304C \u304B\u304B\u3063\u305F\u3088\uFF01" }
+    ]
+  },
+  ocean: {
+    name: "\u3046\u307F",
+    trophyEmoji: "\u{1F433}",
+    stages: [
+      { min: 0, emoji: "\u{1F41A}", label: "\u304B\u3044\u304C\u3089 \u307F\u3064\u3051\u305F" },
+      { min: 10, emoji: "\u{1F420}", label: "\u3061\u3044\u3055\u306A \u3055\u304B\u306A" },
+      { min: 20, emoji: "\u{1F421}", label: "\u3075\u3050\u3055\u3093" },
+      { min: 30, emoji: "\u{1F41F}", label: "\u3055\u304B\u306A\u304C \u3075\u3048\u305F" },
+      { min: 40, emoji: "\u{1F991}", label: "\u3044\u304B" },
+      { min: 50, emoji: "\u{1F42C}", label: "\u3044\u308B\u304B" },
+      { min: 60, emoji: "\u{1F433}", label: "\u304F\u3058\u3089" },
+      { min: 70, emoji: "\u{1F30A}", label: "\u304A\u304A\u304D\u306A \u306A\u307F" },
+      { min: 80, emoji: "\u{1F308}", label: "\u3046\u307F\u306B \u306B\u3058\u304C \u304B\u304B\u3063\u305F\u3088\uFF01" }
+    ]
+  }
+};
+const THEME_ORDER = ["flower", "sky", "ocean"];
+const MAX_STAMPS = THEMES.flower.stages[THEMES.flower.stages.length - 1].min;
+const STAMP_ICONS = ["\u2B50", "\u{1F338}", "\u{1F496}", "\u2728"];
+const STORAGE_KEY = "onee-chan-task-state-v2";
+const genId = () => `t-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+function usePressable() {
+  const [pressedId, setPressedId] = useState(null);
+  const press = (id) => setPressedId(id);
+  const release = () => setPressedId(null);
+  return { pressedId, press, release };
+}
+function OneeChanApp() {
+  const [tasks, setTasks] = useState(DEFAULT_TASKS);
+  const [done, setDone] = useState(
+    () => DEFAULT_TASKS.reduce((acc, t) => ({ ...acc, [t.id]: false }), {})
+  );
+  const [totalStamps, setTotalStamps] = useState(0);
+  const [theme, setThemeState] = useState("flower");
+  const [completedCounts, setCompletedCounts] = useState({});
+  const [poppedId, setPoppedId] = useState(null);
+  const [burstId, setBurstId] = useState(null);
+  const { pressedId, press, release } = usePressable();
+  const [resetPressed, setResetPressed] = useState(false);
+  const [minusPressed, setMinusPressed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const audioCtxRef = useRef(null);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const loadedTasks = Array.isArray(parsed.tasks) && parsed.tasks.length > 0 ? parsed.tasks : DEFAULT_TASKS;
+        setTasks(loadedTasks);
+        const baseDone = loadedTasks.reduce((acc, t) => ({ ...acc, [t.id]: false }), {});
+        setDone({ ...baseDone, ...parsed.done || {} });
+        if (typeof parsed.totalStamps === "number") setTotalStamps(parsed.totalStamps);
+        if (typeof parsed.theme === "string" && THEMES[parsed.theme]) setThemeState(parsed.theme);
+        if (parsed.completedCounts && typeof parsed.completedCounts === "object") {
+          setCompletedCounts(parsed.completedCounts);
+        }
+      }
+    } catch (e) {
+    } finally {
+      setLoaded(true);
+    }
+  }, []);
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ tasks, done, totalStamps, theme, completedCounts })
+      );
+    } catch (e) {
+    }
+  }, [tasks, done, totalStamps, theme, completedCounts, loaded]);
+  const playPop = useCallback((variant = "tap") => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
+      const ctx = audioCtxRef.current;
+      if (ctx.state === "suspended") ctx.resume();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "triangle";
+      const now = ctx.currentTime;
+      if (variant === "tap") {
+        osc.frequency.setValueAtTime(620, now);
+        osc.frequency.exponentialRampToValueAtTime(260, now + 0.11);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(1e-3, now + 0.14);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      } else if (variant === "minus") {
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.exponentialRampToValueAtTime(150, now + 0.12);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(1e-3, now + 0.13);
+        osc.start(now);
+        osc.stop(now + 0.14);
+      } else {
+        osc.frequency.setValueAtTime(340, now);
+        osc.frequency.exponentialRampToValueAtTime(180, now + 0.09);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(1e-3, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.11);
+      }
+    } catch (e) {
+    }
+  }, []);
+  const todayDoneCount = tasks.filter((t) => done[t.id]).length;
+  const allTodayDone = tasks.length > 0 && todayDoneCount === tasks.length;
+  const cycleCount = totalStamps % 10;
+  const displayCount = cycleCount === 0 && totalStamps > 0 ? 10 : cycleCount;
+  const stampSlots = Array.from({ length: 10 }, (_, i) => i < displayCount);
+  const stages = THEMES[theme].stages;
+  const flowerStage = [...stages].reverse().find((s) => totalStamps >= s.min);
+  const nextStage = stages.find((s) => s.min > totalStamps);
+  const bookFull = totalStamps >= MAX_STAMPS;
+  useEffect(() => {
+    if (poppedId) {
+      const t = setTimeout(() => setPoppedId(null), 700);
+      return () => clearTimeout(t);
+    }
+  }, [poppedId]);
+  useEffect(() => {
+    if (burstId) {
+      const t = setTimeout(() => setBurstId(null), 900);
+      return () => clearTimeout(t);
+    }
+  }, [burstId]);
+  const handleTap = (id) => {
+    if (done[id]) return;
+    playPop("tap");
+    setDone((prev) => ({ ...prev, [id]: true }));
+    setTotalStamps((prev) => Math.min(MAX_STAMPS, prev + 1));
+    setPoppedId(id);
+    setBurstId(id);
+  };
+  const handleResetTasks = () => {
+    playPop("reset");
+    setDone(tasks.reduce((acc, t) => ({ ...acc, [t.id]: false }), {}));
+    setPoppedId(null);
+    setBurstId(null);
+  };
+  const handleMinusStamp = () => {
+    if (totalStamps <= 0) return;
+    playPop("minus");
+    setTotalStamps((prev) => Math.max(0, prev - 1));
+  };
+  const handlePreviewTheme = (newTheme) => {
+    if (newTheme === theme) return;
+    setThemeState(newTheme);
+  };
+  const handleAdvanceTheme = (newTheme) => {
+    playPop("tap");
+    setCompletedCounts((prev) => ({ ...prev, [theme]: (prev[theme] || 0) + 1 }));
+    setThemeState(newTheme);
+    setTotalStamps(0);
+  };
+  const updateTaskField = (id, field, value) => {
+    setTasks((prev) => prev.map((t) => t.id === id ? { ...t, [field]: value } : t));
+  };
+  const addTask = () => {
+    const newTask = { id: genId(), label: "\u3042\u305F\u3089\u3057\u3044 \u30BF\u30B9\u30AF", emoji: "\u{1F4DD}" };
+    setTasks((prev) => [...prev, newTask]);
+    setDone((prev) => ({ ...prev, [newTask.id]: false }));
+  };
+  const removeTask = (id) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    setDone((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+  const moveTask = (id, direction) => {
+    setTasks((prev) => {
+      const idx = prev.findIndex((t) => t.id === id);
+      const swapIdx = idx + direction;
+      if (idx === -1 || swapIdx < 0 || swapIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      return next;
+    });
+  };
+  return /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: "min-h-screen w-full flex justify-center",
+      style: {
+        background: "linear-gradient(180deg, #FFF6EE 0%, #FDEFF9 55%, #F2E9FF 100%)",
+        fontFamily: "'Baloo 2', system-ui, sans-serif"
+      }
+    },
+    /* @__PURE__ */ React.createElement("style", null, `
+        @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap');
+
+        @keyframes pop-in {
+          0% { transform: scale(0) rotate(-15deg); opacity: 0; }
+          60% { transform: scale(1.25) rotate(8deg); opacity: 1; }
+          100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        @keyframes bounce-back {
+          0% { transform: translateY(6px); }
+          50% { transform: translateY(-3px); }
+          100% { transform: translateY(0); }
+        }
+        @keyframes float-away {
+          0% { transform: translateY(0) scale(0.6); opacity: 0; }
+          20% { opacity: 1; transform: translateY(-4px) scale(1); }
+          100% { transform: translateY(-46px) scale(1.1); opacity: 0; }
+        }
+        @keyframes stamp-pop {
+          0% { transform: scale(0); }
+          55% { transform: scale(1.3); }
+          100% { transform: scale(1); }
+        }
+        @keyframes gentle-bob {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-6px); }
+        }
+        @keyframes sparkle {
+          0% { transform: translate(0,0) scale(0.5) rotate(0deg); opacity: 1; }
+          100% { transform: translate(var(--tx), var(--ty)) scale(1.1) rotate(180deg); opacity: 0; }
+        }
+        @keyframes wiggle-in {
+          0% { transform: translateY(10px); opacity: 0; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes grow-pop {
+          0% { transform: scale(0.7) rotate(-6deg); opacity: 0.4; }
+          60% { transform: scale(1.15) rotate(4deg); opacity: 1; }
+          100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        @keyframes panel-in {
+          0% { opacity: 0; transform: translateY(-6px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .task-card { animation: wiggle-in 0.5s ease both; }
+        .push-btn { transition: transform 0.06s ease, box-shadow 0.06s ease; }
+        .push-btn.bounce { animation: bounce-back 0.28s ease; }
+        .mascot-bob { animation: gentle-bob 2.8s ease-in-out infinite; }
+        .hanamaru-pop { animation: pop-in 0.55s cubic-bezier(0.34,1.56,0.64,1) both; }
+        .stamp-pop { animation: stamp-pop 0.45s cubic-bezier(0.34,1.56,0.64,1) both; }
+        .float-text { animation: float-away 0.9s ease-out forwards; }
+        .sparkle-bit { position: absolute; animation: sparkle 0.8s ease-out forwards; }
+        .flower-grow { animation: grow-pop 0.5s cubic-bezier(0.34,1.56,0.64,1) both; }
+        .settings-panel { animation: panel-in 0.2s ease both; }
+        .settings-input {
+          font-family: system-ui, sans-serif;
+          font-size: 13px;
+          border: 1px solid #DEDAD1;
+          border-radius: 8px;
+          padding: 6px 8px;
+          background: #FFFFFF;
+          color: #4A4A46;
+        }
+        .settings-input:focus { outline: 1.5px solid #C9C3B6; }
+      `),
+    /* @__PURE__ */ React.createElement("div", { className: "w-full max-w-sm flex flex-col", style: { minHeight: "100vh" } }, /* @__PURE__ */ React.createElement("div", { className: "px-5 pt-6 pb-3 text-center relative" }, /* @__PURE__ */ React.createElement("div", { className: "mascot-bob text-5xl mb-1" }, "\u{1F430}"), /* @__PURE__ */ React.createElement(
+      "h1",
+      {
+        className: "text-2xl font-extrabold",
+        style: { color: "#8A5A7A", letterSpacing: "0.5px" }
+      },
+      "\u304A\u306D\u3048\u3061\u3083\u3093 \u30BF\u30B9\u30AF"
+    ), /* @__PURE__ */ React.createElement("p", { className: "text-sm font-semibold mt-1", style: { color: "#B78CA6" } }, "\u304D\u3087\u3046\u306E \u30BF\u30B9\u30AF ", todayDoneCount, " / ", tasks.length), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => setSettingsOpen((v) => !v),
+        "aria-label": "\u30BF\u30B9\u30AF\u3092 \u3078\u3093\u3057\u3085\u3046 \u3059\u308B",
+        className: "absolute top-6 right-5 w-8 h-8 rounded-full flex items-center justify-center text-sm",
+        style: {
+          background: "#FFFFFF99",
+          border: "1px solid #E4DCE0",
+          color: "#A99AA3"
+        }
+      },
+      "\u2699\uFE0F"
+    )), settingsOpen && /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "settings-panel mx-4 mb-3 rounded-2xl p-3",
+        style: { background: "#F7F5F1", border: "1px solid #E6E1D6" }
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "text-xs font-bold mb-2", style: { color: "#8C877C" } }, "\u30BF\u30B9\u30AF\u306E \u3078\u3093\u3057\u3085\u3046"),
+      /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-2 mb-2" }, tasks.map((task, idx) => /* @__PURE__ */ React.createElement("div", { key: task.id, className: "flex items-center gap-1.5" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-0.5 flex-shrink-0" }, /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => moveTask(task.id, -1),
+          disabled: idx === 0,
+          "aria-label": "\u3046\u3048\u306B \u3046\u3054\u304B\u3059",
+          className: "w-5 h-4 rounded flex items-center justify-center text-[9px] leading-none",
+          style: {
+            background: idx === 0 ? "#F7F5F1" : "#EFECE4",
+            color: idx === 0 ? "#D6D1C6" : "#8C877C",
+            border: "1px solid #E0DACD"
+          }
+        },
+        "\u25B2"
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => moveTask(task.id, 1),
+          disabled: idx === tasks.length - 1,
+          "aria-label": "\u3057\u305F\u306B \u3046\u3054\u304B\u3059",
+          className: "w-5 h-4 rounded flex items-center justify-center text-[9px] leading-none",
+          style: {
+            background: idx === tasks.length - 1 ? "#F7F5F1" : "#EFECE4",
+            color: idx === tasks.length - 1 ? "#D6D1C6" : "#8C877C",
+            border: "1px solid #E0DACD"
+          }
+        },
+        "\u25BC"
+      )), /* @__PURE__ */ React.createElement(
+        "input",
+        {
+          type: "text",
+          value: task.emoji,
+          onChange: (e) => updateTaskField(task.id, "emoji", e.target.value),
+          className: "settings-input text-center",
+          style: { width: "38px" },
+          maxLength: 4
+        }
+      ), /* @__PURE__ */ React.createElement(
+        "input",
+        {
+          type: "text",
+          value: task.label,
+          onChange: (e) => updateTaskField(task.id, "label", e.target.value),
+          className: "settings-input flex-1"
+        }
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => removeTask(task.id),
+          "aria-label": "\u3053\u306E\u30BF\u30B9\u30AF\u3092 \u3051\u3059",
+          className: "w-7 h-7 rounded-full flex items-center justify-center text-xs flex-shrink-0",
+          style: { background: "#F0E9E7", color: "#B08880", border: "1px solid #E5D9D6" }
+        },
+        "\u2715"
+      ))), tasks.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "text-xs text-center py-2", style: { color: "#A9A399" } }, "\u30BF\u30B9\u30AF\u304C \u3042\u308A\u307E\u305B\u3093")),
+      /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: addTask,
+          className: "w-full rounded-lg py-1.5 text-xs font-bold",
+          style: { background: "#EFECE4", color: "#8C877C", border: "1px solid #E0DACD" }
+        },
+        "\uFF0B \u30BF\u30B9\u30AF\u3092 \u3064\u3044\u304B\u3059\u308B"
+      )
+    ), /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "mx-4 mt-1 mb-3 rounded-3xl p-5 text-center",
+        style: {
+          background: "#F5FBEF",
+          border: "3px solid #CDEBAF",
+          boxShadow: "0 6px 0 #CDEBAF66"
+        }
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "text-sm font-extrabold mb-2", style: { color: "#5B7A3A" } }, "\u305D\u3060\u3066\u3088\u3046\uFF01\u300C", THEMES[theme].name, "\u300D"),
+      /* @__PURE__ */ React.createElement("div", { key: `${theme}-${flowerStage.min}`, className: "flower-grow text-8xl mb-2 mascot-bob" }, flowerStage.emoji),
+      /* @__PURE__ */ React.createElement("div", { className: "text-lg font-extrabold mb-3", style: { color: "#6B8A4E" } }, flowerStage.label),
+      /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between px-1 mb-2" }, stages.map((s) => {
+        const reached = totalStamps >= s.min;
+        const isCurrent = flowerStage.min === s.min;
+        const size = isCurrent ? 34 : 22;
+        return /* @__PURE__ */ React.createElement("div", { key: s.min, className: "flex-1 flex justify-center" }, /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            className: "rounded-full flex items-center justify-center",
+            style: {
+              width: size,
+              height: size,
+              fontSize: isCurrent ? 17 : 11,
+              background: reached ? "#FFEFB0" : "#EDEAE2",
+              border: `2.5px solid ${reached ? "#FFC94D" : "#DAD5C9"}`,
+              boxShadow: isCurrent ? "0 0 0 4px #FFEFB088" : "none",
+              transition: "all 0.3s ease"
+            }
+          },
+          s.emoji
+        ));
+      })),
+      /* @__PURE__ */ React.createElement("div", { className: "relative h-2.5 rounded-full mb-3", style: { background: "#E7E1D8" } }, /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          className: "absolute left-0 top-0 h-2.5 rounded-full",
+          style: {
+            width: `${Math.min(100, totalStamps / MAX_STAMPS * 100)}%`,
+            background: "#FFC94D",
+            transition: "width 0.5s ease"
+          }
+        }
+      )),
+      /* @__PURE__ */ React.createElement("div", { className: "text-sm font-bold mb-3", style: { color: "#8A9B6E" } }, bookFull ? "\u307E\u3093\u304B\u3044 \u30B3\u30F3\u30D7\u30EA\u30FC\u30C8\uFF01\u3059\u3054\u3044\u306D\uFF01" : `\u3064\u304E\u306E \u3059\u304C\u305F\u307E\u3067 \u3042\u3068 ${nextStage.min - totalStamps} \u3053\uFF01`),
+      THEME_ORDER.some((id) => completedCounts[id] > 0) && /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-center gap-3 mb-3 text-sm font-bold", style: { color: "#8A9B6E" } }, THEME_ORDER.filter((id) => completedCounts[id] > 0).map((id) => /* @__PURE__ */ React.createElement("span", { key: id }, THEMES[id].trophyEmoji, " \xD7", completedCounts[id]))),
+      bookFull ? /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "text-xs font-bold mb-2", style: { color: "#6B8A4E" } }, "\u3064\u304E\u306F \u3069\u306E \u30B8\u30E3\u30F3\u30EB\u306B \u3059\u308B\uFF1F"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-center gap-2" }, THEME_ORDER.map((id) => /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          key: id,
+          onClick: () => handleAdvanceTheme(id),
+          className: "push-btn flex flex-col items-center gap-1 rounded-2xl px-3 py-2",
+          style: {
+            background: id === theme ? "#FFEFB0" : "#FFFFFF",
+            border: `2px solid ${id === theme ? "#FFC94D" : "#DDEBC9"}`,
+            boxShadow: `0 3px 0 ${id === theme ? "#E8A93A" : "#DDEBC9"}`
+          }
+        },
+        /* @__PURE__ */ React.createElement("span", { className: "text-2xl" }, THEMES[id].stages[0].emoji),
+        /* @__PURE__ */ React.createElement("span", { className: "text-xs font-bold", style: { color: "#6B8A4E" } }, THEMES[id].name)
+      )))) : THEME_ORDER.length > 1 && /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-center gap-2" }, THEME_ORDER.map((id) => /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          key: id,
+          onClick: () => handlePreviewTheme(id),
+          "aria-label": `${THEMES[id].name} \u306E \u307F\u305F\u3081 \u306B \u3059\u308B`,
+          className: "w-8 h-8 rounded-full flex items-center justify-center text-base",
+          style: {
+            background: id === theme ? "#FFEFB0" : "#F3F1EA",
+            border: `1.5px solid ${id === theme ? "#FFC94D" : "#E4E0D6"}`,
+            opacity: id === theme ? 1 : 0.6
+          }
+        },
+        THEMES[id].stages[0].emoji
+      )))
+    ), /* @__PURE__ */ React.createElement("div", { className: "flex-1 px-5 pt-2 pb-4 flex flex-col gap-4" }, tasks.map((task, idx) => {
+      const isDone = done[task.id];
+      const isPressed = pressedId === task.id;
+      const shadowSize = isDone ? 0 : isPressed ? 0 : 6;
+      const translateY = isPressed && !isDone ? 6 : 0;
+      const colors = PALETTE[idx % PALETTE.length];
+      return /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          key: task.id,
+          onClick: () => handleTap(task.id),
+          onMouseDown: () => press(task.id),
+          onMouseUp: release,
+          onMouseLeave: release,
+          onTouchStart: () => press(task.id),
+          onTouchEnd: release,
+          disabled: isDone,
+          className: "push-btn task-card relative w-full rounded-3xl p-4 flex items-center gap-4 text-left overflow-visible",
+          style: {
+            animationDelay: `${idx * 0.08}s`,
+            background: isDone ? "#EFEDEA" : colors.bg,
+            border: `3px solid ${isDone ? "#D8D4CD" : colors.ring}`,
+            boxShadow: isDone ? "none" : `0 ${shadowSize}px 0 ${colors.ring}bb`,
+            opacity: isDone ? 0.75 : 1,
+            transform: `translateY(${translateY}px)`
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            className: "text-5xl flex-shrink-0",
+            style: { filter: isDone ? "grayscale(0.6)" : "none" }
+          },
+          task.emoji
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            className: "text-lg font-bold leading-snug flex-1",
+            style: { color: isDone ? "#9C968E" : "#5B4A5A" }
+          },
+          task.label
+        ),
+        isDone && /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            className: "hanamaru-pop absolute -top-3 -right-2 w-16 h-16 rounded-full flex items-center justify-center text-3xl",
+            style: {
+              background: "#FFF4D6",
+              border: "3px solid #FFC94D",
+              boxShadow: "0 3px 0 #E8A93A"
+            }
+          },
+          "\u{1F4AE}"
+        ),
+        poppedId === task.id && /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            className: "float-text absolute left-1/2 -translate-x-1/2 -top-2 text-lg font-extrabold px-3 py-1 rounded-full whitespace-nowrap",
+            style: { color: "#B4521F", background: "#FFE8CE", border: "2px solid #FFB870" }
+          },
+          "\u3067\u304D\u305F\uFF01"
+        ),
+        burstId === task.id && ["\u2728", "\u2B50", "\u2728", "\u2B50", "\u2728"].map((s, i) => /* @__PURE__ */ React.createElement(
+          "span",
+          {
+            key: i,
+            className: "sparkle-bit text-xl",
+            style: {
+              left: "50%",
+              top: "50%",
+              "--tx": `${Math.cos(i / 5 * 2 * Math.PI) * 60}px`,
+              "--ty": `${Math.sin(i / 5 * 2 * Math.PI) * 60}px`
+            }
+          },
+          s
+        ))
+      );
+    }), tasks.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "text-center text-sm font-bold py-6", style: { color: "#B7ACAE" } }, "\u2699\uFE0F \u304B\u3089 \u30BF\u30B9\u30AF\u3092 \u3064\u3044\u304B\u3057\u3066\u306D"), allTodayDone && tasks.length > 0 && /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "hanamaru-pop text-center text-base font-extrabold rounded-2xl py-3",
+        style: { color: "#B4521F", background: "#FFE8CE", border: "2px dashed #FFB870" }
+      },
+      "\u304D\u3087\u3046\u306E \u30BF\u30B9\u30AF \u305C\u3093\u3076 \u3067\u304D\u305F\uFF01 \u{1F4AE}"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: handleResetTasks,
+        onMouseDown: () => setResetPressed(true),
+        onMouseUp: () => setResetPressed(false),
+        onMouseLeave: () => setResetPressed(false),
+        onTouchStart: () => setResetPressed(true),
+        onTouchEnd: () => setResetPressed(false),
+        className: "push-btn mt-1 flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold",
+        style: {
+          background: "#FFFFFFcc",
+          border: "2px solid #F3D9E8",
+          color: "#8A5A7A",
+          boxShadow: resetPressed ? "0 0 0 #F3D9E8" : "0 5px 0 #F3D9E8",
+          transform: `translateY(${resetPressed ? 5 : 0}px)`
+        }
+      },
+      /* @__PURE__ */ React.createElement("span", null, "\u{1F504}"),
+      /* @__PURE__ */ React.createElement("span", null, "\u304D\u3087\u3046\u306E \u30BF\u30B9\u30AF\u3092 \u30EA\u30BB\u30C3\u30C8")
+    )), /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "mx-4 mb-6 rounded-3xl p-4",
+        style: {
+          background: "#FFFDF8",
+          border: "3px solid #F3D9E8",
+          boxShadow: "0 6px 0 #F3D9E844"
+        }
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-3" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm font-extrabold", style: { color: "#8A5A7A" } }, "\u30B9\u30BF\u30F3\u30D7\u30AB\u30FC\u30C9"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm font-bold", style: { color: "#B78CA6" } }, displayCount, " / 10\uFF08\u308B\u3044\u3051\u3044 ", totalStamps, "\u3053\uFF09"), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: handleMinusStamp,
+          onMouseDown: () => setMinusPressed(true),
+          onMouseUp: () => setMinusPressed(false),
+          onMouseLeave: () => setMinusPressed(false),
+          onTouchStart: () => setMinusPressed(true),
+          onTouchEnd: () => setMinusPressed(false),
+          disabled: totalStamps <= 0,
+          "aria-label": "\u30B9\u30BF\u30F3\u30D7\u3092 \u3072\u3068\u3064 \u3082\u3069\u3059",
+          className: "push-btn w-8 h-8 rounded-full flex items-center justify-center text-base font-extrabold",
+          style: {
+            background: totalStamps <= 0 ? "#F2EFEA" : "#FFE3E3",
+            border: `2px solid ${totalStamps <= 0 ? "#E3E0D8" : "#FFB4B4"}`,
+            color: totalStamps <= 0 ? "#C7C3BA" : "#C24E4E",
+            boxShadow: totalStamps <= 0 ? "none" : minusPressed ? "0 0 0 #FFB4B4" : "0 3px 0 #FFB4B4",
+            transform: `translateY(${minusPressed && totalStamps > 0 ? 3 : 0}px)`
+          }
+        },
+        "\u22121"
+      ))),
+      /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-5 gap-2 mb-1" }, stampSlots.map((filled, i) => /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          key: i,
+          className: "aspect-square rounded-full flex items-center justify-center text-lg",
+          style: {
+            background: filled ? "#FFEFB0" : "#F7F3EE",
+            border: `2.5px solid ${filled ? "#FFC94D" : "#E7E1D8"}`
+          }
+        },
+        filled && /* @__PURE__ */ React.createElement("span", { className: "stamp-pop" }, STAMP_ICONS[i % STAMP_ICONS.length])
+      )))
+    ))
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(OneeChanApp, null));
+
+</script>
+</body>
+</html>
